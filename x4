@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 
 local player = Players.LocalPlayer
 local targetImageId = "rbxassetid://2908769190"
@@ -17,10 +18,13 @@ local needGlitter = true
 local dragging = false
 local dragOffset = Vector2.new(0, 0)
 local guiVisible = true
+local lastTouchPosition = nil
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoBuffGUI"
-screenGui.Parent = player.PlayerGui
+screenGui.DisplayOrder = 999
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 320, 0, 220)
@@ -28,11 +32,15 @@ mainFrame.Position = UDim2.new(0.5, -160, 0, 10)
 mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 mainFrame.BorderSizePixel = 2
 mainFrame.BorderColor3 = Color3.fromRGB(0, 150, 255)
+mainFrame.Active = true
+mainFrame.Selectable = true
 mainFrame.Parent = screenGui
 
-local titleBar = Instance.new("Frame")
+local titleBar = Instance.new("TextButton")
 titleBar.Size = UDim2.new(1, 0, 0, 30)
 titleBar.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+titleBar.Text = ""
+titleBar.AutoButtonColor = false
 titleBar.Parent = mainFrame
 
 local titleText = Instance.new("TextLabel")
@@ -247,16 +255,30 @@ local function checkAndUse()
     end
     lastCheckTime = currentTime
     
-    local iconTile = findBuffIconTile()
-    if not iconTile then
+    local success1, iconTile = pcall(findBuffIconTile)
+    if not success1 or not iconTile then
         statusLabel.Text = "Status: Buff not found"
         return
     end
     
-    local bar = iconTile.BG.bar
-    if not bar then return end
+    local success2, bar = pcall(function()
+        return iconTile.BG.bar
+    end)
     
-    local barSize = bar.AbsoluteSize.Y
+    if not success2 or not bar then
+        statusLabel.Text = "Status: Bar not found"
+        return
+    end
+    
+    local success3, barSize = pcall(function()
+        return bar.AbsoluteSize.Y
+    end)
+    
+    if not success3 then
+        barSizeLabel.Text = "Bar size: Error"
+        return
+    end
+    
     barSizeLabel.Text = string.format("Bar size: %.2f", barSize)
     
     local glitterCount = GetItemCount("Glitter")
@@ -300,29 +322,75 @@ local function checkAndUse()
     end
 end
 
-titleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        local mousePosition = UserInputService:GetMouseLocation()
-        dragOffset = Vector2.new(mousePosition.X, mousePosition.Y) - Vector2.new(mainFrame.AbsolutePosition.X, mainFrame.AbsolutePosition.Y)
+local function updateGuiPosition()
+    if not mainFrame then return end
+    
+    if UserInputService.TouchEnabled then
+        local touchInput = UserInputService:GetInputBeganSignal():Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then
+                local touchPosition = input.Position
+                local framePos = mainFrame.AbsolutePosition
+                local frameSize = mainFrame.AbsoluteSize
+                
+                if touchPosition.X >= framePos.X and touchPosition.X <= framePos.X + frameSize.X and
+                   touchPosition.Y >= framePos.Y and touchPosition.Y <= framePos.Y + frameSize.Y then
+                    lastTouchPosition = touchPosition
+                end
+            end
+        end)
+        
+        local touchMoved = UserInputService:GetInputChangedSignal():Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch and lastTouchPosition then
+                local currentTouch = input.Position
+                local delta = currentTouch - lastTouchPosition
+                
+                local newX = mainFrame.Position.X.Offset + delta.X
+                local newY = mainFrame.Position.Y.Offset + delta.Y
+                
+                newX = math.clamp(newX, 0, workspace.CurrentCamera.ViewportSize.X - mainFrame.AbsoluteSize.X)
+                newY = math.clamp(newY, 0, workspace.CurrentCamera.ViewportSize.Y - mainFrame.AbsoluteSize.Y)
+                
+                mainFrame.Position = UDim2.new(0, newX, 0, newY)
+                
+                lastTouchPosition = currentTouch
+            end
+        end)
+        
+        local touchEnded = UserInputService:GetInputEndedSignal():Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then
+                lastTouchPosition = nil
+            end
+        end)
+    else
+        titleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                local mousePosition = UserInputService:GetMouseLocation()
+                dragOffset = Vector2.new(mousePosition.X, mousePosition.Y) - Vector2.new(mainFrame.AbsolutePosition.X, mainFrame.AbsolutePosition.Y)
+            end
+        end)
+        
+        titleBar.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+                local mousePosition = UserInputService:GetMouseLocation()
+                local newPosition = mousePosition - dragOffset
+                mainFrame.Position = UDim2.new(0, newPosition.X, 0, newPosition.Y)
+            end
+        end)
     end
-end)
-
-titleBar.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local mousePosition = UserInputService:GetMouseLocation()
-        local newPosition = mousePosition - dragOffset
-        mainFrame.Position = UDim2.new(0, newPosition.X, 0, newPosition.Y)
-    end
-end)
+end
 
 closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+closeButton.TouchTap:Connect(function()
     screenGui:Destroy()
 end)
 
@@ -331,7 +399,31 @@ hideButton.MouseButton1Click:Connect(function()
     mainFrame.Visible = guiVisible
 end)
 
+hideButton.TouchTap:Connect(function()
+    guiVisible = not guiVisible
+    mainFrame.Visible = guiVisible
+end)
+
 toggleBtn.MouseButton1Click:Connect(function()
+    isActive = not isActive
+    
+    if isActive then
+        toggleBtn.Text = "Disable Auto Buff"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        statusLabel.Text = "Status: Active"
+        statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
+        needGlitter = true
+    else
+        toggleBtn.Text = "Enable Auto Buff"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        statusLabel.Text = "Status: Inactive"
+        statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
+        nextItemLabel.Text = "Next: -"
+        needGlitter = true
+    end
+end)
+
+toggleBtn.TouchTap:Connect(function()
     isActive = not isActive
     
     if isActive then
@@ -360,3 +452,5 @@ player.CharacterAdded:Connect(function()
     end
 end)
 
+updateGuiPosition()
+print("Auto Field Buff script loaded!")
