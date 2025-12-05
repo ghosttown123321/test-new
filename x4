@@ -1,0 +1,362 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local targetImageId = "rbxassetid://2908769190"
+local fieldPosition = Vector3.new(-331.6, 68.0, -183.1)
+
+local MOVE_SPEED = 12
+local CHECK_INTERVAL = 1
+local lastCheckTime = 0
+
+local isActive = false
+local needGlitter = true
+local dragging = false
+local dragOffset = Vector2.new(0, 0)
+local guiVisible = true
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "AutoBuffGUI"
+screenGui.Parent = player.PlayerGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 320, 0, 220)
+mainFrame.Position = UDim2.new(0.5, -160, 0, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BorderSizePixel = 2
+mainFrame.BorderColor3 = Color3.fromRGB(0, 150, 255)
+mainFrame.Parent = screenGui
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+titleBar.Parent = mainFrame
+
+local titleText = Instance.new("TextLabel")
+titleText.Text = "Auto Field Buff"
+titleText.Size = UDim2.new(0.8, 0, 1, 0)
+titleText.BackgroundTransparency = 1
+titleText.TextColor3 = Color3.new(1, 1, 1)
+titleText.Font = Enum.Font.SourceSansBold
+titleText.TextSize = 18
+titleText.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Text = "X"
+closeButton.Size = UDim2.new(0, 30, 1, 0)
+closeButton.Position = UDim2.new(1, -30, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 16
+closeButton.Parent = titleBar
+
+local hideButton = Instance.new("TextButton")
+hideButton.Text = "_"
+hideButton.Size = UDim2.new(0, 30, 1, 0)
+hideButton.Position = UDim2.new(1, -60, 0, 0)
+hideButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+hideButton.TextColor3 = Color3.new(1, 1, 1)
+hideButton.Font = Enum.Font.SourceSansBold
+hideButton.TextSize = 16
+hideButton.Parent = titleBar
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Text = "Enable Auto Buff"
+toggleBtn.Size = UDim2.new(0.9, 0, 0, 40)
+toggleBtn.Position = UDim2.new(0.05, 0, 0.18, 0)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextSize = 16
+toggleBtn.Parent = mainFrame
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Text = "Status: Inactive"
+statusLabel.Size = UDim2.new(0.9, 0, 0, 25)
+statusLabel.Position = UDim2.new(0.05, 0, 0.4, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
+statusLabel.Font = Enum.Font.SourceSans
+statusLabel.TextSize = 14
+statusLabel.Parent = mainFrame
+
+local nextItemLabel = Instance.new("TextLabel")
+nextItemLabel.Text = "Next: -"
+nextItemLabel.Size = UDim2.new(0.9, 0, 0, 25)
+nextItemLabel.Position = UDim2.new(0.05, 0, 0.55, 0)
+nextItemLabel.BackgroundTransparency = 1
+nextItemLabel.TextColor3 = Color3.new(0.8, 0.8, 1)
+nextItemLabel.Font = Enum.Font.SourceSans
+nextItemLabel.TextSize = 14
+nextItemLabel.Parent = mainFrame
+
+local barSizeLabel = Instance.new("TextLabel")
+barSizeLabel.Text = "Bar size: -"
+barSizeLabel.Size = UDim2.new(0.9, 0, 0, 25)
+barSizeLabel.Position = UDim2.new(0.05, 0, 0.7, 0)
+barSizeLabel.BackgroundTransparency = 1
+barSizeLabel.TextColor3 = Color3.new(1, 1, 0.8)
+barSizeLabel.Font = Enum.Font.SourceSans
+barSizeLabel.TextSize = 14
+barSizeLabel.Parent = mainFrame
+
+local itemsLabel = Instance.new("TextLabel")
+itemsLabel.Text = "Items: -"
+itemsLabel.Size = UDim2.new(0.9, 0, 0, 25)
+itemsLabel.Position = UDim2.new(0.05, 0, 0.85, 0)
+itemsLabel.BackgroundTransparency = 1
+itemsLabel.TextColor3 = Color3.new(0.8, 1, 0.8)
+itemsLabel.Font = Enum.Font.SourceSans
+itemsLabel.TextSize = 14
+itemsLabel.Parent = mainFrame
+
+local function GetItemCount(itemName)
+    local success, eggRowsFolder = pcall(function()
+        return player.PlayerGui.ScreenGui.Menus.Children.Eggs.Content.EggRows
+    end)
+    
+    if not success or not eggRowsFolder then
+        return 0
+    end
+    
+    for _, eggRow in ipairs(eggRowsFolder:GetChildren()) do
+        if eggRow:FindFirstChild("TypeName") then
+            local typeName = eggRow.TypeName.Text
+            
+            if typeName:lower():find(itemName:lower()) then
+                local count = 0
+                
+                if eggRow:FindFirstChild("EggSlot") and eggRow.EggSlot:FindFirstChild("Count") then
+                    local countText = eggRow.EggSlot.Count.Text
+                    local extracted = countText:match("%d+")
+                    if extracted then
+                        count = tonumber(extracted)
+                    end
+                end
+                
+                if count == 0 and eggRow:FindFirstChild("ContentText") then
+                    local contentText = eggRow.ContentText.Text
+                    local extracted = contentText:match("%d+")
+                    if extracted then
+                        count = tonumber(extracted)
+                    end
+                end
+                
+                return count
+            end
+        end
+    end
+    
+    return 0
+end
+
+local function findBuffIconTile()
+    local success, tileGrid = pcall(function()
+        return player.PlayerGui.ScreenGui.TileGrid
+    end)
+    
+    if not success or not tileGrid then
+        return nil
+    end
+    
+    local child17 = tileGrid:GetChildren()[17]
+    if child17 then
+        local bg = child17:FindFirstChild("BG")
+        if bg then
+            local icon = bg:FindFirstChild("Icon")
+            if icon and icon.Image == targetImageId then
+                return child17
+            end
+        end
+    end
+    
+    for _, child in ipairs(tileGrid:GetChildren()) do
+        local bg = child:FindFirstChild("BG")
+        if bg then
+            local icon = bg:FindFirstChild("Icon")
+            if icon and icon.Image == targetImageId then
+                return child
+            end
+        end
+    end
+    
+    return nil
+end
+
+local function moveToFieldWithTween()
+    local character = player.Character
+    if not character then return false end
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return false end
+    
+    local distance = (humanoidRootPart.Position - fieldPosition).Magnitude
+    
+    if distance > 10 then
+        statusLabel.Text = "Status: Moving to field..."
+        
+        local tweenInfo = TweenInfo.new(
+            distance / MOVE_SPEED,
+            Enum.EasingStyle.Linear,
+            Enum.EasingDirection.Out,
+            0,
+            false,
+            0
+        )
+        
+        local goal = {}
+        goal.Position = fieldPosition
+        
+        local tween = TweenService:Create(humanoidRootPart, tweenInfo, goal)
+        tween:Play()
+        
+        local startTime = tick()
+        while tween.PlaybackState == Enum.PlaybackState.Playing and tick() - startTime < 5 do
+            wait(0.1)
+        end
+        
+        tween:Cancel()
+        
+        wait(0.5)
+    end
+    
+    return true
+end
+
+local function useItem(itemName)
+    if itemName == "Glitter" then
+        local GL = {["Name"] = "Glitter"}
+        ReplicatedStorage.Events.PlayerActivesCommand:FireServer(GL)
+        needGlitter = false
+    elseif itemName == "Field Dice" then
+        local FD = {["Name"] = "Field Dice"}
+        ReplicatedStorage.Events.PlayerActivesCommand:FireServer(FD)
+    end
+end
+
+local function checkAndUse()
+    if not isActive then return end
+    
+    local currentTime = tick()
+    if currentTime - lastCheckTime < CHECK_INTERVAL then
+        return
+    end
+    lastCheckTime = currentTime
+    
+    local iconTile = findBuffIconTile()
+    if not iconTile then
+        statusLabel.Text = "Status: Buff not found"
+        return
+    end
+    
+    local bar = iconTile.BG.bar
+    if not bar then return end
+    
+    local barSize = bar.AbsoluteSize.Y
+    barSizeLabel.Text = string.format("Bar size: %.2f", barSize)
+    
+    local glitterCount = GetItemCount("Glitter")
+    local diceCount = GetItemCount("Field Dice")
+    itemsLabel.Text = string.format("Items: G:%d D:%d", glitterCount, diceCount)
+    
+    if barSize > 3.2 then
+        needGlitter = true
+        statusLabel.Text = "Status: Buff active"
+        nextItemLabel.Text = "Next: Waiting ≤3.2"
+        return
+    end
+    
+    if barSize <= 3.2 then
+        local itemToUse = nil
+        
+        if needGlitter and glitterCount > 0 then
+            itemToUse = "Glitter"
+        elseif diceCount > 0 then
+            itemToUse = "Field Dice"
+        end
+        
+        if itemToUse then
+            nextItemLabel.Text = "Next: " .. itemToUse
+            
+            if itemToUse == "Glitter" then
+                if moveToFieldWithTween() then
+                    statusLabel.Text = "Status: Using " .. itemToUse
+                    useItem(itemToUse)
+                    wait(1)
+                end
+            else
+                statusLabel.Text = "Status: Using " .. itemToUse
+                useItem(itemToUse)
+                wait(1)
+            end
+        else
+            statusLabel.Text = "Status: No items"
+            nextItemLabel.Text = "Next: Waiting"
+        end
+    end
+end
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        local mousePosition = UserInputService:GetMouseLocation()
+        dragOffset = Vector2.new(mousePosition.X, mousePosition.Y) - Vector2.new(mainFrame.AbsolutePosition.X, mainFrame.AbsolutePosition.Y)
+    end
+end)
+
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local mousePosition = UserInputService:GetMouseLocation()
+        local newPosition = mousePosition - dragOffset
+        mainFrame.Position = UDim2.new(0, newPosition.X, 0, newPosition.Y)
+    end
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+hideButton.MouseButton1Click:Connect(function()
+    guiVisible = not guiVisible
+    mainFrame.Visible = guiVisible
+end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    isActive = not isActive
+    
+    if isActive then
+        toggleBtn.Text = "Disable Auto Buff"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        statusLabel.Text = "Status: Active"
+        statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
+        needGlitter = true
+    else
+        toggleBtn.Text = "Enable Auto Buff"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        statusLabel.Text = "Status: Inactive"
+        statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
+        nextItemLabel.Text = "Next: -"
+        needGlitter = true
+    end
+end)
+
+RunService.Heartbeat:Connect(function()
+    pcall(checkAndUse)
+end)
+
+player.CharacterAdded:Connect(function()
+    if not screenGui.Parent then
+        screenGui.Parent = player.PlayerGui
+    end
+end)
+
