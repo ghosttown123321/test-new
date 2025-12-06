@@ -2,6 +2,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local targetImageId = "rbxassetid://2908769190"
@@ -13,9 +14,17 @@ local lastCheckTime = 0
 
 local isActive = false
 local needGlitter = true
+local dragging = false
+local dragStart = Vector2.new(0, 0)
+local frameStart = Vector2.new(0, 0)
+
+if player.PlayerGui:FindFirstChild("AutoBuffGUI") then
+    player.PlayerGui.AutoBuffGUI:Destroy()
+end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoBuffGUI"
+screenGui.ResetOnSpawn = false
 screenGui.Parent = player.PlayerGui
 
 local frame = Instance.new("Frame")
@@ -24,16 +33,35 @@ frame.Position = UDim2.new(0.5, -150, 0, 10)
 frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 frame.BorderSizePixel = 2
 frame.BorderColor3 = Color3.fromRGB(0, 170, 255)
+frame.Active = true
+frame.Selectable = true
 frame.Parent = screenGui
+
+local titleBar = Instance.new("TextButton")
+titleBar.Text = ""
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+titleBar.AutoButtonColor = false
+titleBar.Parent = frame
 
 local title = Instance.new("TextLabel")
 title.Text = "Auto Field Buff"
-title.Size = UDim2.new(1, 0, 0, 30)
-title.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+title.Size = UDim2.new(0.8, 0, 1, 0)
+title.BackgroundTransparency = 1
 title.TextColor3 = Color3.new(1, 1, 1)
 title.Font = Enum.Font.SourceSansBold
 title.TextSize = 18
-title.Parent = frame
+title.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Text = "X"
+closeButton.Size = UDim2.new(0, 30, 1, 0)
+closeButton.Position = UDim2.new(1, -30, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.TextColor3 = Color3.new(1, 1, 1)
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.TextSize = 16
+closeButton.Parent = titleBar
 
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Text = "Enable Auto Buff"
@@ -47,58 +75,68 @@ toggleBtn.Parent = frame
 
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Text = "Status: Inactive"
-statusLabel.Size = UDim2.new(1, 0, 0, 30)
+statusLabel.Size = UDim2.new(1, 0, 0, 25)
 statusLabel.Position = UDim2.new(0, 0, 0.45, 0)
 statusLabel.BackgroundTransparency = 1
 statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
 statusLabel.Font = Enum.Font.SourceSans
-statusLabel.TextSize = 16
+statusLabel.TextSize = 14
 statusLabel.Parent = frame
 
 local nextItemLabel = Instance.new("TextLabel")
 nextItemLabel.Text = "Next: -"
-nextItemLabel.Size = UDim2.new(1, 0, 0, 30)
+nextItemLabel.Size = UDim2.new(1, 0, 0, 25)
 nextItemLabel.Position = UDim2.new(0, 0, 0.6, 0)
 nextItemLabel.BackgroundTransparency = 1
 nextItemLabel.TextColor3 = Color3.new(0.8, 0.8, 1)
 nextItemLabel.Font = Enum.Font.SourceSans
-nextItemLabel.TextSize = 16
+nextItemLabel.TextSize = 14
 nextItemLabel.Parent = frame
 
 local barSizeLabel = Instance.new("TextLabel")
 barSizeLabel.Text = "Bar size: -"
-barSizeLabel.Size = UDim2.new(1, 0, 0, 30)
+barSizeLabel.Size = UDim2.new(1, 0, 0, 25)
 barSizeLabel.Position = UDim2.new(0, 0, 0.75, 0)
 barSizeLabel.BackgroundTransparency = 1
 barSizeLabel.TextColor3 = Color3.new(1, 1, 0.8)
 barSizeLabel.Font = Enum.Font.SourceSans
-barSizeLabel.TextSize = 16
+barSizeLabel.TextSize = 14
 barSizeLabel.Parent = frame
+
+local debugLabel = Instance.new("TextLabel")
+debugLabel.Text = "Debug: OK"
+debugLabel.Size = UDim2.new(1, 0, 0, 25)
+debugLabel.Position = UDim2.new(0, 0, 0.9, 0)
+debugLabel.BackgroundTransparency = 1
+debugLabel.TextColor3 = Color3.new(0.8, 1, 0.8)
+debugLabel.Font = Enum.Font.SourceSans
+debugLabel.TextSize = 12
+debugLabel.Parent = frame
 
 local function findBuffIconTile()
     local tileGrid = player.PlayerGui.ScreenGui.TileGrid
+    debugLabel.Text = "Debug: Searching..."
     
     local child17 = tileGrid:GetChildren()[17]
     if child17 then
-        local bg = child17.BG
-        if bg then
-            local icon = bg.Icon
-            if icon and icon.Image == targetImageId then
+        if child17.BG and child17.BG.Icon then
+            if child17.BG.Icon.Image == targetImageId then
+                debugLabel.Text = "Debug: Found at 17"
                 return child17
             end
         end
     end
     
-    for _, child in ipairs(tileGrid:GetChildren()) do
-        local bg = child.BG
-        if bg then
-            local icon = bg.Icon
-            if icon and icon.Image == targetImageId then
+    for i, child in ipairs(tileGrid:GetChildren()) do
+        if child.BG and child.BG.Icon then
+            if child.BG.Icon.Image == targetImageId then
+                debugLabel.Text = "Debug: Found at " .. i
                 return child
             end
         end
     end
     
+    debugLabel.Text = "Debug: Not found"
     return nil
 end
 
@@ -112,26 +150,17 @@ local function moveToFieldWithTween()
     local distance = (humanoidRootPart.Position - fieldPosition).Magnitude
     
     if distance > 10 then
-        statusLabel.Text = "Status: Moving to field..."
+        statusLabel.Text = "Moving to field..."
         
         local tweenInfo = TweenInfo.new(
             distance / MOVE_SPEED,
-            Enum.EasingStyle.Linear,
-            Enum.EasingDirection.Out,
-            0,
-            false,
-            0
+            Enum.EasingStyle.Linear
         )
         
         local tween = TweenService:Create(humanoidRootPart, tweenInfo, {Position = fieldPosition})
         tween:Play()
         
-        local startTime = tick()
-        while tick() - startTime < 5 do
-            wait(0.1)
-        end
-        
-        wait(0.5)
+        wait(distance / MOVE_SPEED + 0.5)
     end
     
     return true
@@ -161,33 +190,32 @@ local function checkAndUse()
     
     local iconTile = findBuffIconTile()
     if not iconTile then
-        statusLabel.Text = "Status: Buff not found"
+        statusLabel.Text = "Buff not found"
         return
     end
     
-    local bg = iconTile.BG
-    if not bg then
-        statusLabel.Text = "Status: BG not found"
+    if not iconTile.BG then
+        statusLabel.Text = "BG not found"
         return
     end
     
-    local bar = bg.bar
+    local bar = iconTile.BG.bar
     if not bar then
-        bar = bg.Bar
+        bar = iconTile.BG.Bar
     end
     
     if not bar then
-        statusLabel.Text = "Status: Bar not found"
+        statusLabel.Text = "Bar not found"
         return
     end
     
     local barSize = bar.AbsoluteSize.Y
-    barSizeLabel.Text = "Bar size: " .. math.floor(barSize)
+    barSizeLabel.Text = "Bar size: " .. math.floor(barSize * 10) / 10
     
     if barSize > 3.2 then
         needGlitter = true
-        statusLabel.Text = "Status: Buff active"
-        nextItemLabel.Text = "Next: Waiting ≤3.2"
+        statusLabel.Text = "Buff active"
+        nextItemLabel.Text = "Next: Wait ≤3.2"
         return
     end
     
@@ -205,21 +233,55 @@ local function checkAndUse()
             
             if itemToUse == "Glitter" then
                 if moveToFieldWithTween() then
-                    statusLabel.Text = "Status: Using " .. itemToUse
+                    statusLabel.Text = "Using " .. itemToUse
                     useItem(itemToUse)
                     wait(1)
                 end
             else
-                statusLabel.Text = "Status: Using " .. itemToUse
+                statusLabel.Text = "Using " .. itemToUse
                 useItem(itemToUse)
                 wait(1)
             end
         else
-            statusLabel.Text = "Status: Waiting"
+            statusLabel.Text = "Waiting"
             nextItemLabel.Text = "Next: Waiting"
         end
     end
 end
+
+local function startDragging(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = Vector2.new(input.Position.X, input.Position.Y)
+        frameStart = Vector2.new(frame.AbsolutePosition.X, frame.AbsolutePosition.Y)
+    end
+end
+
+local function stopDragging(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end
+
+local function updateDrag(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local currentPos = Vector2.new(input.Position.X, input.Position.Y)
+        local delta = currentPos - dragStart
+        
+        local newX = math.clamp(frameStart.X + delta.X, 0, workspace.CurrentCamera.ViewportSize.X - frame.AbsoluteSize.X)
+        local newY = math.clamp(frameStart.Y + delta.Y, 0, workspace.CurrentCamera.ViewportSize.Y - frame.AbsoluteSize.Y)
+        
+        frame.Position = UDim2.new(0, newX, 0, newY)
+    end
+end
+
+titleBar.InputBegan:Connect(startDragging)
+titleBar.InputEnded:Connect(stopDragging)
+UserInputService.InputChanged:Connect(updateDrag)
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
 
 toggleBtn.MouseButton1Click:Connect(function()
     isActive = not isActive
@@ -230,6 +292,7 @@ toggleBtn.MouseButton1Click:Connect(function()
         statusLabel.Text = "Status: Active"
         statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
         needGlitter = true
+        debugLabel.Text = "Debug: Enabled"
     else
         toggleBtn.Text = "Enable Auto Buff"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
@@ -237,12 +300,16 @@ toggleBtn.MouseButton1Click:Connect(function()
         statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
         nextItemLabel.Text = "Next: -"
         needGlitter = true
+        debugLabel.Text = "Debug: Disabled"
     end
 end)
 
-while true do
-    if isActive then
-        checkAndUse()
+spawn(function()
+    while wait(CHECK_INTERVAL) do
+        if isActive then
+            checkAndUse()
+        end
     end
-    wait(CHECK_INTERVAL)
-end
+end)
+
+print("Auto Field Buff loaded")
