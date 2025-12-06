@@ -2,8 +2,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
 
 local player = Players.LocalPlayer
 local targetImageId = "rbxassetid://2908769190"
@@ -15,112 +13,67 @@ local lastCheckTime = 0
 
 local isActive = false
 local needGlitter = true
-local dragging = false
-local dragOffset = Vector2.new(0, 0)
-local guiVisible = true
-local lastTouchPosition = nil
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "AutoBuffGUI"
-screenGui.DisplayOrder = 999
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.Parent = player.PlayerGui
 
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 320, 0, 220)
-mainFrame.Position = UDim2.new(0.5, -160, 0, 10)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-mainFrame.BorderSizePixel = 2
-mainFrame.BorderColor3 = Color3.fromRGB(0, 150, 255)
-mainFrame.Active = true
-mainFrame.Selectable = true
-mainFrame.Parent = screenGui
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 300, 0, 200)
+frame.Position = UDim2.new(0.5, -150, 0, 10)
+frame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+frame.BorderSizePixel = 2
+frame.BorderColor3 = Color3.fromRGB(0, 170, 255)
+frame.Parent = screenGui
 
-local titleBar = Instance.new("TextButton")
-titleBar.Size = UDim2.new(1, 0, 0, 30)
-titleBar.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-titleBar.Text = ""
-titleBar.AutoButtonColor = false
-titleBar.Parent = mainFrame
-
-local titleText = Instance.new("TextLabel")
-titleText.Text = "Auto Field Buff"
-titleText.Size = UDim2.new(0.8, 0, 1, 0)
-titleText.BackgroundTransparency = 1
-titleText.TextColor3 = Color3.new(1, 1, 1)
-titleText.Font = Enum.Font.SourceSansBold
-titleText.TextSize = 18
-titleText.Parent = titleBar
-
-local closeButton = Instance.new("TextButton")
-closeButton.Text = "X"
-closeButton.Size = UDim2.new(0, 30, 1, 0)
-closeButton.Position = UDim2.new(1, -30, 0, 0)
-closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeButton.TextColor3 = Color3.new(1, 1, 1)
-closeButton.Font = Enum.Font.SourceSansBold
-closeButton.TextSize = 16
-closeButton.Parent = titleBar
-
-local hideButton = Instance.new("TextButton")
-hideButton.Text = "_"
-hideButton.Size = UDim2.new(0, 30, 1, 0)
-hideButton.Position = UDim2.new(1, -60, 0, 0)
-hideButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-hideButton.TextColor3 = Color3.new(1, 1, 1)
-hideButton.Font = Enum.Font.SourceSansBold
-hideButton.TextSize = 16
-hideButton.Parent = titleBar
+local title = Instance.new("TextLabel")
+title.Text = "Auto Field Buff"
+title.Size = UDim2.new(1, 0, 0, 30)
+title.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
+title.Parent = frame
 
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Text = "Enable Auto Buff"
-toggleBtn.Size = UDim2.new(0.9, 0, 0, 40)
-toggleBtn.Position = UDim2.new(0.05, 0, 0.18, 0)
+toggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
+toggleBtn.Position = UDim2.new(0.1, 0, 0.2, 0)
 toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
 toggleBtn.TextColor3 = Color3.new(1, 1, 1)
 toggleBtn.Font = Enum.Font.SourceSansBold
 toggleBtn.TextSize = 16
-toggleBtn.Parent = mainFrame
+toggleBtn.Parent = frame
 
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Text = "Status: Inactive"
-statusLabel.Size = UDim2.new(0.9, 0, 0, 25)
-statusLabel.Position = UDim2.new(0.05, 0, 0.4, 0)
+statusLabel.Size = UDim2.new(1, 0, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0.45, 0)
 statusLabel.BackgroundTransparency = 1
 statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
 statusLabel.Font = Enum.Font.SourceSans
-statusLabel.TextSize = 14
-statusLabel.Parent = mainFrame
+statusLabel.TextSize = 16
+statusLabel.Parent = frame
 
 local nextItemLabel = Instance.new("TextLabel")
 nextItemLabel.Text = "Next: -"
-nextItemLabel.Size = UDim2.new(0.9, 0, 0, 25)
-nextItemLabel.Position = UDim2.new(0.05, 0, 0.55, 0)
+nextItemLabel.Size = UDim2.new(1, 0, 0, 30)
+nextItemLabel.Position = UDim2.new(0, 0, 0.6, 0)
 nextItemLabel.BackgroundTransparency = 1
 nextItemLabel.TextColor3 = Color3.new(0.8, 0.8, 1)
 nextItemLabel.Font = Enum.Font.SourceSans
-nextItemLabel.TextSize = 14
-nextItemLabel.Parent = mainFrame
+nextItemLabel.TextSize = 16
+nextItemLabel.Parent = frame
 
 local barSizeLabel = Instance.new("TextLabel")
 barSizeLabel.Text = "Bar size: -"
-barSizeLabel.Size = UDim2.new(0.9, 0, 0, 25)
-barSizeLabel.Position = UDim2.new(0.05, 0, 0.7, 0)
+barSizeLabel.Size = UDim2.new(1, 0, 0, 30)
+barSizeLabel.Position = UDim2.new(0, 0, 0.75, 0)
 barSizeLabel.BackgroundTransparency = 1
 barSizeLabel.TextColor3 = Color3.new(1, 1, 0.8)
 barSizeLabel.Font = Enum.Font.SourceSans
-barSizeLabel.TextSize = 14
-barSizeLabel.Parent = mainFrame
-
-local itemsLabel = Instance.new("TextLabel")
-itemsLabel.Text = "Items: -"
-itemsLabel.Size = UDim2.new(0.9, 0, 0, 25)
-itemsLabel.Position = UDim2.new(0.05, 0, 0.85, 0)
-itemsLabel.BackgroundTransparency = 1
-itemsLabel.TextColor3 = Color3.new(0.8, 1, 0.8)
-itemsLabel.Font = Enum.Font.SourceSans
-itemsLabel.TextSize = 14
-itemsLabel.Parent = mainFrame
+barSizeLabel.TextSize = 16
+barSizeLabel.Parent = frame
 
 local function GetItemCount(itemName)
     local success, eggRowsFolder = pcall(function()
@@ -168,6 +121,7 @@ local function findBuffIconTile()
     end)
     
     if not success or not tileGrid then
+        print("TileGrid not found")
         return nil
     end
     
@@ -247,7 +201,9 @@ local function useItem(itemName)
 end
 
 local function checkAndUse()
-    if not isActive then return end
+    if not isActive then 
+        return 
+    end
     
     local currentTime = tick()
     if currentTime - lastCheckTime < CHECK_INTERVAL then
@@ -270,20 +226,11 @@ local function checkAndUse()
         return
     end
     
-    local success3, barSize = pcall(function()
-        return bar.AbsoluteSize.Y
-    end)
-    
-    if not success3 then
-        barSizeLabel.Text = "Bar size: Error"
-        return
-    end
-    
+    local barSize = bar.AbsoluteSize.Y
     barSizeLabel.Text = string.format("Bar size: %.2f", barSize)
     
     local glitterCount = GetItemCount("Glitter")
     local diceCount = GetItemCount("Field Dice")
-    itemsLabel.Text = string.format("Items: G:%d D:%d", glitterCount, diceCount)
     
     if barSize > 3.2 then
         needGlitter = true
@@ -322,89 +269,8 @@ local function checkAndUse()
     end
 end
 
-local function updateGuiPosition()
-    if not mainFrame then return end
-    
-    if UserInputService.TouchEnabled then
-        local touchInput = UserInputService:GetInputBeganSignal():Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Touch then
-                local touchPosition = input.Position
-                local framePos = mainFrame.AbsolutePosition
-                local frameSize = mainFrame.AbsoluteSize
-                
-                if touchPosition.X >= framePos.X and touchPosition.X <= framePos.X + frameSize.X and
-                   touchPosition.Y >= framePos.Y and touchPosition.Y <= framePos.Y + frameSize.Y then
-                    lastTouchPosition = touchPosition
-                end
-            end
-        end)
-        
-        local touchMoved = UserInputService:GetInputChangedSignal():Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Touch and lastTouchPosition then
-                local currentTouch = input.Position
-                local delta = currentTouch - lastTouchPosition
-                
-                local newX = mainFrame.Position.X.Offset + delta.X
-                local newY = mainFrame.Position.Y.Offset + delta.Y
-                
-                newX = math.clamp(newX, 0, workspace.CurrentCamera.ViewportSize.X - mainFrame.AbsoluteSize.X)
-                newY = math.clamp(newY, 0, workspace.CurrentCamera.ViewportSize.Y - mainFrame.AbsoluteSize.Y)
-                
-                mainFrame.Position = UDim2.new(0, newX, 0, newY)
-                
-                lastTouchPosition = currentTouch
-            end
-        end)
-        
-        local touchEnded = UserInputService:GetInputEndedSignal():Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Touch then
-                lastTouchPosition = nil
-            end
-        end)
-    else
-        titleBar.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = true
-                local mousePosition = UserInputService:GetMouseLocation()
-                dragOffset = Vector2.new(mousePosition.X, mousePosition.Y) - Vector2.new(mainFrame.AbsolutePosition.X, mainFrame.AbsolutePosition.Y)
-            end
-        end)
-        
-        titleBar.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                dragging = false
-            end
-        end)
-        
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-                local mousePosition = UserInputService:GetMouseLocation()
-                local newPosition = mousePosition - dragOffset
-                mainFrame.Position = UDim2.new(0, newPosition.X, 0, newPosition.Y)
-            end
-        end)
-    end
-end
-
-closeButton.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
-closeButton.TouchTap:Connect(function()
-    screenGui:Destroy()
-end)
-
-hideButton.MouseButton1Click:Connect(function()
-    guiVisible = not guiVisible
-    mainFrame.Visible = guiVisible
-end)
-
-hideButton.TouchTap:Connect(function()
-    guiVisible = not guiVisible
-    mainFrame.Visible = guiVisible
-end)
-
 toggleBtn.MouseButton1Click:Connect(function()
+    print("Button clicked!")
     isActive = not isActive
     
     if isActive then
@@ -413,6 +279,7 @@ toggleBtn.MouseButton1Click:Connect(function()
         statusLabel.Text = "Status: Active"
         statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
         needGlitter = true
+        print("Auto Buff enabled")
     else
         toggleBtn.Text = "Enable Auto Buff"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
@@ -420,30 +287,18 @@ toggleBtn.MouseButton1Click:Connect(function()
         statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
         nextItemLabel.Text = "Next: -"
         needGlitter = true
-    end
-end)
-
-toggleBtn.TouchTap:Connect(function()
-    isActive = not isActive
-    
-    if isActive then
-        toggleBtn.Text = "Disable Auto Buff"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-        statusLabel.Text = "Status: Active"
-        statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
-        needGlitter = true
-    else
-        toggleBtn.Text = "Enable Auto Buff"
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        statusLabel.Text = "Status: Inactive"
-        statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
-        nextItemLabel.Text = "Next: -"
-        needGlitter = true
+        print("Auto Buff disabled")
     end
 end)
 
 RunService.Heartbeat:Connect(function()
-    pcall(checkAndUse)
+    local success, err = pcall(function()
+        checkAndUse()
+    end)
+    
+    if not success then
+        print("Error in checkAndUse: " .. tostring(err))
+    end
 end)
 
 player.CharacterAdded:Connect(function()
@@ -452,5 +307,5 @@ player.CharacterAdded:Connect(function()
     end
 end)
 
-updateGuiPosition()
-print("Auto Field Buff script loaded!")
+print("Auto Field Buff script loaded successfully!")
+print("Click the button to enable")
