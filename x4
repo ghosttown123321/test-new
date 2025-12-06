@@ -75,61 +75,14 @@ barSizeLabel.Font = Enum.Font.SourceSans
 barSizeLabel.TextSize = 16
 barSizeLabel.Parent = frame
 
-local function GetItemCount(itemName)
-    local success, eggRowsFolder = pcall(function()
-        return player.PlayerGui.ScreenGui.Menus.Children.Eggs.Content.EggRows
-    end)
-    
-    if not success or not eggRowsFolder then
-        return 0
-    end
-    
-    for _, eggRow in ipairs(eggRowsFolder:GetChildren()) do
-        if eggRow:FindFirstChild("TypeName") then
-            local typeName = eggRow.TypeName.Text
-            
-            if typeName:lower():find(itemName:lower()) then
-                local count = 0
-                
-                if eggRow:FindFirstChild("EggSlot") and eggRow.EggSlot:FindFirstChild("Count") then
-                    local countText = eggRow.EggSlot.Count.Text
-                    local extracted = countText:match("%d+")
-                    if extracted then
-                        count = tonumber(extracted)
-                    end
-                end
-                
-                if count == 0 and eggRow:FindFirstChild("ContentText") then
-                    local contentText = eggRow.ContentText.Text
-                    local extracted = contentText:match("%d+")
-                    if extracted then
-                        count = tonumber(extracted)
-                    end
-                end
-                
-                return count
-            end
-        end
-    end
-    
-    return 0
-end
-
 local function findBuffIconTile()
-    local success, tileGrid = pcall(function()
-        return player.PlayerGui.ScreenGui.TileGrid
-    end)
-    
-    if not success or not tileGrid then
-        print("TileGrid not found")
-        return nil
-    end
+    local tileGrid = player.PlayerGui.ScreenGui.TileGrid
     
     local child17 = tileGrid:GetChildren()[17]
     if child17 then
-        local bg = child17:FindFirstChild("BG")
+        local bg = child17.BG
         if bg then
-            local icon = bg:FindFirstChild("Icon")
+            local icon = bg.Icon
             if icon and icon.Image == targetImageId then
                 return child17
             end
@@ -137,9 +90,9 @@ local function findBuffIconTile()
     end
     
     for _, child in ipairs(tileGrid:GetChildren()) do
-        local bg = child:FindFirstChild("BG")
+        local bg = child.BG
         if bg then
-            local icon = bg:FindFirstChild("Icon")
+            local icon = bg.Icon
             if icon and icon.Image == targetImageId then
                 return child
             end
@@ -153,7 +106,7 @@ local function moveToFieldWithTween()
     local character = player.Character
     if not character then return false end
     
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local humanoidRootPart = character.HumanoidRootPart
     if not humanoidRootPart then return false end
     
     local distance = (humanoidRootPart.Position - fieldPosition).Magnitude
@@ -170,18 +123,13 @@ local function moveToFieldWithTween()
             0
         )
         
-        local goal = {}
-        goal.Position = fieldPosition
-        
-        local tween = TweenService:Create(humanoidRootPart, tweenInfo, goal)
+        local tween = TweenService:Create(humanoidRootPart, tweenInfo, {Position = fieldPosition})
         tween:Play()
         
         local startTime = tick()
-        while tween.PlaybackState == Enum.PlaybackState.Playing and tick() - startTime < 5 do
+        while tick() - startTime < 5 do
             wait(0.1)
         end
-        
-        tween:Cancel()
         
         wait(0.5)
     end
@@ -211,26 +159,30 @@ local function checkAndUse()
     end
     lastCheckTime = currentTime
     
-    local success1, iconTile = pcall(findBuffIconTile)
-    if not success1 or not iconTile then
+    local iconTile = findBuffIconTile()
+    if not iconTile then
         statusLabel.Text = "Status: Buff not found"
         return
     end
     
-    local success2, bar = pcall(function()
-        return iconTile.BG.bar
-    end)
+    local bg = iconTile.BG
+    if not bg then
+        statusLabel.Text = "Status: BG not found"
+        return
+    end
     
-    if not success2 or not bar then
+    local bar = bg.bar
+    if not bar then
+        bar = bg.Bar
+    end
+    
+    if not bar then
         statusLabel.Text = "Status: Bar not found"
         return
     end
     
     local barSize = bar.AbsoluteSize.Y
-    barSizeLabel.Text = string.format("Bar size: %.2f", barSize)
-    
-    local glitterCount = GetItemCount("Glitter")
-    local diceCount = GetItemCount("Field Dice")
+    barSizeLabel.Text = "Bar size: " .. math.floor(barSize)
     
     if barSize > 3.2 then
         needGlitter = true
@@ -242,9 +194,9 @@ local function checkAndUse()
     if barSize <= 3.2 then
         local itemToUse = nil
         
-        if needGlitter and glitterCount > 0 then
+        if needGlitter then
             itemToUse = "Glitter"
-        elseif diceCount > 0 then
+        else
             itemToUse = "Field Dice"
         end
         
@@ -263,14 +215,13 @@ local function checkAndUse()
                 wait(1)
             end
         else
-            statusLabel.Text = "Status: No items"
+            statusLabel.Text = "Status: Waiting"
             nextItemLabel.Text = "Next: Waiting"
         end
     end
 end
 
 toggleBtn.MouseButton1Click:Connect(function()
-    print("Button clicked!")
     isActive = not isActive
     
     if isActive then
@@ -279,7 +230,6 @@ toggleBtn.MouseButton1Click:Connect(function()
         statusLabel.Text = "Status: Active"
         statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
         needGlitter = true
-        print("Auto Buff enabled")
     else
         toggleBtn.Text = "Enable Auto Buff"
         toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
@@ -287,25 +237,12 @@ toggleBtn.MouseButton1Click:Connect(function()
         statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
         nextItemLabel.Text = "Next: -"
         needGlitter = true
-        print("Auto Buff disabled")
     end
 end)
 
-RunService.Heartbeat:Connect(function()
-    local success, err = pcall(function()
+while true do
+    if isActive then
         checkAndUse()
-    end)
-    
-    if not success then
-        print("Error in checkAndUse: " .. tostring(err))
     end
-end)
-
-player.CharacterAdded:Connect(function()
-    if not screenGui.Parent then
-        screenGui.Parent = player.PlayerGui
-    end
-end)
-
-print("Auto Field Buff script loaded successfully!")
-print("Click the button to enable")
+    wait(CHECK_INTERVAL)
+end
