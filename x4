@@ -18,8 +18,10 @@ local dragging = false
 local dragStart = Vector2.new(0, 0)
 local frameStart = Vector2.new(0, 0)
 
-if player.PlayerGui:FindFirstChild("AutoBuffGUI") then
-    player.PlayerGui.AutoBuffGUI:Destroy()
+for _, gui in pairs(player.PlayerGui:GetChildren()) do
+    if gui.Name == "AutoBuffGUI" then
+        gui:Destroy()
+    end
 end
 
 local screenGui = Instance.new("ScreenGui")
@@ -115,13 +117,11 @@ debugLabel.Parent = frame
 
 local function findBuffIconTile()
     local tileGrid = player.PlayerGui.ScreenGui.TileGrid
-    debugLabel.Text = "Debug: Searching..."
     
     local child17 = tileGrid:GetChildren()[17]
     if child17 then
         if child17.BG and child17.BG.Icon then
             if child17.BG.Icon.Image == targetImageId then
-                debugLabel.Text = "Debug: Found at 17"
                 return child17
             end
         end
@@ -130,13 +130,11 @@ local function findBuffIconTile()
     for i, child in ipairs(tileGrid:GetChildren()) do
         if child.BG and child.BG.Icon then
             if child.BG.Icon.Image == targetImageId then
-                debugLabel.Text = "Debug: Found at " .. i
                 return child
             end
         end
     end
     
-    debugLabel.Text = "Debug: Not found"
     return nil
 end
 
@@ -144,7 +142,7 @@ local function moveToFieldWithTween()
     local character = player.Character
     if not character then return false end
     
-    local humanoidRootPart = character.HumanoidRootPart
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
     if not humanoidRootPart then return false end
     
     local distance = (humanoidRootPart.Position - fieldPosition).Magnitude
@@ -188,34 +186,42 @@ local function checkAndUse()
     end
     lastCheckTime = currentTime
     
+    debugLabel.Text = "Debug: Checking..."
+    
     local iconTile = findBuffIconTile()
     if not iconTile then
         statusLabel.Text = "Buff not found"
+        debugLabel.Text = "Debug: No buff"
         return
     end
     
-    if not iconTile.BG then
+    if not iconTile:FindFirstChild("BG") then
         statusLabel.Text = "BG not found"
+        debugLabel.Text = "Debug: No BG"
         return
     end
     
-    local bar = iconTile.BG.bar
+    local bg = iconTile.BG
+    
+    local bar = bg:FindFirstChild("bar")
     if not bar then
-        bar = iconTile.BG.Bar
+        bar = bg:FindFirstChild("Bar")
     end
     
     if not bar then
         statusLabel.Text = "Bar not found"
+        debugLabel.Text = "Debug: No bar"
         return
     end
     
     local barSize = bar.AbsoluteSize.Y
-    barSizeLabel.Text = "Bar size: " .. math.floor(barSize * 10) / 10
+    barSizeLabel.Text = "Bar size: " .. tostring(math.floor(barSize * 10) / 10)
     
     if barSize > 3.2 then
         needGlitter = true
         statusLabel.Text = "Buff active"
         nextItemLabel.Text = "Next: Wait ≤3.2"
+        debugLabel.Text = "Debug: Bar > 3.2"
         return
     end
     
@@ -242,9 +248,11 @@ local function checkAndUse()
                 useItem(itemToUse)
                 wait(1)
             end
+            debugLabel.Text = "Debug: Used " .. itemToUse
         else
             statusLabel.Text = "Waiting"
             nextItemLabel.Text = "Next: Waiting"
+            debugLabel.Text = "Debug: Waiting"
         end
     end
 end
@@ -283,7 +291,32 @@ closeButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
+closeButton.TouchTap:Connect(function()
+    screenGui:Destroy()
+end)
+
 toggleBtn.MouseButton1Click:Connect(function()
+    isActive = not isActive
+    
+    if isActive then
+        toggleBtn.Text = "Disable Auto Buff"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        statusLabel.Text = "Status: Active"
+        statusLabel.TextColor3 = Color3.new(0.5, 1, 0.5)
+        needGlitter = true
+        debugLabel.Text = "Debug: Enabled"
+    else
+        toggleBtn.Text = "Enable Auto Buff"
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        statusLabel.Text = "Status: Inactive"
+        statusLabel.TextColor3 = Color3.new(1, 0.5, 0.5)
+        nextItemLabel.Text = "Next: -"
+        needGlitter = true
+        debugLabel.Text = "Debug: Disabled"
+    end
+end)
+
+toggleBtn.TouchTap:Connect(function()
     isActive = not isActive
     
     if isActive then
@@ -312,4 +345,4 @@ spawn(function()
     end
 end)
 
-print("Auto Field Buff loaded")
+print("Auto Field Buff loaded successfully!")
